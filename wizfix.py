@@ -4,6 +4,8 @@
 # license = "MIT"
 # requires-python = ">=3.12"
 # dependencies = ["click>=8.3"]
+# author = "Jürgen Strobel"
+# email = "juergen+wizfix@strobel.info"
 # ///
 # ruff: noqa: E731
 
@@ -11,10 +13,10 @@
 CLI utility to inspect and edit characters in Wizardry 1-3
 
 (C) 2026 Jürgen Strobel
-List of offsets taken from
+List of offsets and values taken from
 https://www.zimlab.com/wizardry/recovered/wizardrygame/pages/w1/cheat.htm
 
-Why? The MSDOS archives version completely ruined my stats.
+Why? The MSDOS archives version level up bug completely ruined my stats.
 """
 
 import binascii
