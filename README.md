@@ -1,12 +1,13 @@
 # wizfix.py
 
-Simple Wizardry 1-3 CLI character editor. No warranties, make a backup first.
+Simple Wizardry 1-3 CLI character editor for SAVE<X>.DSK files.
+No warranties, make a backup first.
 
 # Installation
 
 It's a self contained Python [uv](https://docs.astral.sh/uv/) script.
 Just make wizfix.py executable and move it somewhere convenient,
-no further installation is needed as long as you have uv. E.g.:
+no further installation is needed as long as you have uv installed. E.g.:
 
     cp wizfix.py ~/.local/bin
     chmod 755 ~/.local/bin/wizfix.py
@@ -17,11 +18,12 @@ if for some reason you don't have uv.
 
 # Features
 
-Run wizfix.py --help
+    > wizfix.py show --help
+    > wizfix.py edit --help
 
 It's a rather minimal CLI editor. Exp, gold, stats, character names and passwords
-are easy to fix. Items and spells require a bit more knowledge. The binary layout
-description was taken from
+are easy to fix. Items and spells require a bit more knowledge of the binary layout,
+which was taken from
 [here](https://www.zimlab.com/wizardry/recovered/wizardrygame/pages/w1/cheat.htm
 ).
 
