@@ -242,7 +242,7 @@ class Character:
     _padding3: hexbytes = padding_field("1s")
     alignment: int = packed_field("B")
     _padding4: hexbytes = padding_field("1s")
-    stats: int = packed_field("4s")
+    stats: hexbytes = packed_field("4s")
 
     _padding5: hexbytes = padding_field("4s")
     gold_raw: hexbytes = packed_field("5s")
