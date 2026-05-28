@@ -33,7 +33,7 @@ VERSION = "0.2"
 
 # --- Character interface ---
 
-FORMAT = "<"  # build dynamically by packed_field() later
+FORMAT = "<"  # built dynamically by packed_field() later
 CHAR_LEN = 0  # same
 B5_WEIGHTS = (1, 256, 10_000, 2_560_000, 100_000_000)
 SHOW_PADDING = False
@@ -50,7 +50,9 @@ def packed_field(fmt, default=None):
     FORMAT += fmt
     CHAR_LEN = struct.calcsize(FORMAT)
     if fmt[-1] == "s" and default is None:
-        default = HexBytesDescriptor()
+        default = HexBytesDescriptor(fmt)
+    # this gives *every* field a default, possibly of None;
+    # necessary because non-defaulted fields cannot follow those with descriptors
     return dataclasses.field(default=default)
 
 
@@ -60,7 +62,7 @@ def padding_field(fmt, default=None):
     FORMAT += fmt
     CHAR_LEN = struct.calcsize(FORMAT)
     if fmt[-1] == "s" and default is None:
-        default = HexBytesDescriptor()
+        default = HexBytesDescriptor(fmt)
     return dataclasses.field(repr=SHOW_PADDING, default=default)
 
 
@@ -83,6 +85,9 @@ def check_stat(name, x):
 
 
 class HexBytesDescriptor:
+    def __init__(self, fmt):
+        self.size = int(fmt[:-1])
+
     def __set_name__(self, owner, name):
         self.name = "_" + name
 
@@ -90,6 +95,8 @@ class HexBytesDescriptor:
         return getattr(obj, self.name)
 
     def __set__(self, obj, value):
+        if isinstance(value, int):
+            value = value.to_bytes(self.size)
         setattr(obj, self.name, hexbytes(value))
 
 
@@ -155,9 +162,7 @@ class AgeDescriptor:
 
 
 class B5_Descriptor:
-    """A number encoded in 5 bytes"""
-
-    # note: no need to work with nibbles, the higher one is always 16x
+    """A number encoded in 5 bytes using B5_WEIGTHS"""
 
     def __set_name__(self, owner, name):
         self.name_raw = name + "_raw"
@@ -227,23 +232,23 @@ class Character:
     password: str = packed_field("16p")
 
     out: int = packed_field("B")
-    _pad0: int = padding_field("B")
+    _padding0: hexbytes = padding_field("1s")
     race: int = packed_field("B")
-    _pad1: int = padding_field("B")
+    _padding1: hexbytes = padding_field("1s")
     cls: int = packed_field("B")
-    _pad2: int = padding_field("B")
+    _padding2: hexbytes = padding_field("1s")
     age_raw: hexbytes = packed_field("2s")
     life: int = packed_field("B")
-    _pad3: int = padding_field("B")
+    _padding3: hexbytes = padding_field("1s")
     alignment: int = packed_field("B")
-    _pad4: int = padding_field("B")
+    _padding4: hexbytes = padding_field("1s")
     stats: int = packed_field("4s")
 
-    _pad5: hexbytes = padding_field("4s")
+    _padding5: hexbytes = padding_field("4s")
     gold_raw: hexbytes = packed_field("5s")
-    _pad6: int = padding_field("B")
+    _padding6: hexbytes = padding_field("1s")
     n_items: int = packed_field("B")
-    _pad7: int = padding_field("B")
+    _padding7: hexbytes = padding_field("1s")
 
     item1_raw: hexbytes = packed_field("8s")
     item2_raw: hexbytes = packed_field("8s")
@@ -255,50 +260,50 @@ class Character:
     item8_raw: hexbytes = packed_field("8s")
 
     experience_raw: hexbytes = packed_field("5s")
-    _pad8: int = padding_field("B")
+    _padding8: hexbytes = padding_field("1s")
     last_level: int = packed_field("B")
-    _pad9: int = padding_field("B")
+    _padding9: hexbytes = padding_field("1s")
     cur_level: int = packed_field("B")
-    _pad10: int = padding_field("B")
+    _padding10: hexbytes = padding_field("1s")
     hitpoints: int = packed_field("H")
     max_hitpoints: int = packed_field("H")
 
     spells_raw: hexbytes = packed_field("7s")
-    _pad11: int = padding_field("B")
+    _padding11: hexbytes = padding_field("1s")
     mage1_spells: int = packed_field("B")
-    _pad12: int = padding_field("B")
+    _padding12: hexbytes = padding_field("1s")
     mage2_spells: int = packed_field("B")
-    _pad13: int = padding_field("B")
+    _padding13: hexbytes = padding_field("1s")
     mage3_spells: int = packed_field("B")
-    _pad14: int = padding_field("B")
+    _padding14: hexbytes = padding_field("1s")
     mage4_spells: int = packed_field("B")
-    _pad15: int = padding_field("B")
+    _padding15: hexbytes = padding_field("1s")
     mage5_spells: int = packed_field("B")
-    _pad16: int = padding_field("B")
+    _padding16: hexbytes = padding_field("1s")
     mage6_spells: int = packed_field("B")
-    _pad17: int = padding_field("B")
+    _padding17: hexbytes = padding_field("1s")
     mage7_spells: int = packed_field("B")
-    _pad18: int = padding_field("B")
+    _padding18: hexbytes = padding_field("1s")
     priest1_spells: int = packed_field("B")
-    _pad19: int = padding_field("B")
+    _padding19: hexbytes = padding_field("1s")
     priest2_spells: int = packed_field("B")
-    _pad20: int = padding_field("B")
+    _padding20: hexbytes = padding_field("1s")
     priest3_spells: int = packed_field("B")
-    _pad21: int = padding_field("B")
+    _padding21: hexbytes = padding_field("1s")
     priest4_spells: int = packed_field("B")
-    _pad22: int = padding_field("B")
+    _padding22: hexbytes = padding_field("1s")
     priest5_spells: int = packed_field("B")
-    _pad23: int = padding_field("B")
+    _padding23: hexbytes = padding_field("1s")
     priest6_spells: int = packed_field("B")
-    _pad24: int = padding_field("B")
+    _padding24: hexbytes = padding_field("1s")
     priest7_spells: int = packed_field("B")
-    _pad25: int = padding_field("B")
+    _padding25: hexbytes = padding_field("1s")
 
     last_ac: int = packed_field("H")
     cur_ac: int = packed_field("H")
-    _pad26: hexbytes = padding_field("4s")
+    _padding26: hexbytes = padding_field("4s")
     items_effects_raw: hexbytes = packed_field("10s")
-    _pad27: hexbytes = padding_field("14s")
+    _padding27: hexbytes = padding_field("14s")
     honors_raw: hexbytes = packed_field("2s")
 
     # virtual fields
@@ -361,29 +366,40 @@ def put_character(data, name, char):
 
 # --- Click CLI ---
 
+wrap_exceptions = True
+"""Wrap everything in user friendly ClickExceptions"""
+
 
 @contextlib.contextmanager
-def handle_errors():
-    try:
+def handle_exceptions():
+    if wrap_exceptions:
+        try:
+            yield
+        except click.ClickException:
+            raise
+        except ValueError as ex:
+            raise click.BadParameter(str(ex)) from ex
+        except Exception as ex:
+            raise click.ClickException(str(ex)) from ex
+    else:
         yield
-    except click.ClickException:
-        raise
-    except ValueError as ex:
-        raise click.BadParameter(str(ex)) from ex
-    except Exception as ex:
-        raise click.ClickException(str(ex)) from ex
 
 
 @click.group()
 @click.version_option(version=VERSION)
-def main():
-    pass
+@click.option("--debug", is_flag=True, help="Show technical details.", envvar="DEBUG")
+def main(debug=False):
+    global wrap_exceptions
+    if debug:
+        wrap_exceptions = False
+        for f in dataclasses.fields(Character):
+            f.repr = True
 
 
 @main.command()
 @click.argument("file", type=click.File("rb"))
 @click.argument("name")
-@handle_errors()
+@handle_exceptions()
 def show(file, name):
     """Show attributes of character NAME in FILE
 
@@ -400,18 +416,26 @@ def show(file, name):
 @click.argument("file", type=click.File("r+b"))
 @click.argument("name")
 @click.argument("tasks", nargs=-1)
-@handle_errors()
+@handle_exceptions()
 def edit(file, name, tasks):
     """Edit attributes of character NAME in FILE
 
     Multiple tasks can be given.
     Each task must be of the form ATTRIBUTE=VALUE, where VALUE has to be a valid
-    Python expression fitting the ATTRIBUTE. In most cases simple numbers are fine,
-    but strings need to be quoted, probably with shell escapes or quotes too.
-    ASCII encoding of Python strings is automatic.
-    Access to the Character object is possible via "self", and you can
-    increase or decrease numbers by using += or -= instead
+    Python expression fitting a character attribute seen with the "show" command.
+    Access to the Character object is possible via "self" for complex expressions,
+    and you can increase or decrease numbers by using += or -= instead
     of plain assignment with =.
+
+    In most cases assigning simple numbers are fine,
+    but strings need to be quoted, probably with shell escapes or quotes too.
+    Binary ASCII encoding of Python strings is done automaticly.
+
+    The fields of type "hexbytes" can be set through ordinary
+    bytes literals (b"..."), or little endian integer literals (0x....).
+
+    Note that in several cases the same character attributes can be accessed
+    (read and written) through either *_raw or cooked attribute names.
 
     Examples (CLI):
 
@@ -423,6 +447,8 @@ def edit(file, name, tasks):
     """
 
     def handle_task(char, task):
+        if "=" not in task:
+            raise ValueError(f"task {repr(task)}")
         attr, valstr = task.split("=", 1)
         match attr[-1]:
             case "+":
@@ -434,15 +460,17 @@ def edit(file, name, tasks):
             case _:
                 op = lambda v, x: x
         if not hasattr(char, attr):
-            raise click.BadParameter(f"character attribute {attr}")
+            raise ValueError(f"character attribute {attr}")
         try:
             val = eval(valstr, globals={"self": char})
             if isinstance(val, str):
                 val = bytes(val, "ASCII")
             val = op(getattr(char, attr), val)
             setattr(char, attr, val)
+        except ValueError:
+            raise
         except Exception as ex:
-            raise click.BadParameter(f"{repr(task)} ({ex.args[0]})") from ex
+            raise ValueError(f"{repr(task)} ({ex.args[0]})") from ex
 
     with mmap.mmap(file.fileno(), 0) as mm:
         char = Character.unpack(get_character(mm, name))
