@@ -16,13 +16,13 @@ CLI utility to inspect and edit characters in Wizardry 1-3
 List of offsets and values taken from
 https://www.zimlab.com/wizardry/recovered/wizardrygame/pages/w1/cheat.htm
 
-Why? The MSDOS archives version level up bug completely ruined my stats.
+Why? The MSDOS archives version's level up bug completely ruined my stats.
 """
 
 import binascii
 import contextlib
 import dataclasses
-import functools
+import itertools
 import math
 import mmap
 import operator
@@ -33,12 +33,17 @@ import click
 
 VERSION = "0.2"
 
+# --- Game Data ---
+
+RACES = ["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"]
+CLASSES = ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
+ALIGNMENTS = ["GOOD", "NEUTRAL", "EVIL"]
+
 # --- Character interface ---
 
 FORMAT = "<"  # built dynamically by packed_field() later
 CHAR_LEN = 0  # same
 B5_WEIGHTS = (1, 256, 10_000, 2_560_000, 100_000_000)
-SHOW_PADDING = False
 
 
 class hexbytes(bytes):
@@ -53,8 +58,9 @@ def packed_field(fmt, default=None):
     CHAR_LEN = struct.calcsize(FORMAT)
     if fmt[-1] == "s" and default is None:
         default = HexBytesDescriptor(fmt)
-    # this gives *every* field a default, possibly of None;
-    # necessary because non-defaulted fields cannot follow those with descriptors
+    # This gives *every* field a default, possibly of None.
+    # Necessary because non-defaulted fields cannot follow fields with descriptors,
+    # apparently at least not when the default is set through dataclasses.field.
     return dataclasses.field(default=default)
 
 
@@ -65,7 +71,7 @@ def padding_field(fmt, default=None):
     CHAR_LEN = struct.calcsize(FORMAT)
     if fmt[-1] == "s" and default is None:
         default = HexBytesDescriptor(fmt)
-    return dataclasses.field(repr=SHOW_PADDING, default=default)
+    return dataclasses.field(repr=False, default=default)
 
 
 def virt_field(default):
@@ -100,6 +106,29 @@ class HexBytesDescriptor:
         if isinstance(value, int):
             value = value.to_bytes(self.size)
         setattr(obj, self.name, hexbytes(value))
+
+
+class TabledDescriptor:
+    def __init__(self, labels):
+        values = list(range(1, len(labels) + 1))
+        self.table = dict(zip(values, labels))
+
+    def __set_name__(self, owner, name):
+        self.name = f"{name}_raw"
+
+    def __get__(self, obj, objtype=None):
+        v = getattr(obj, self.name)
+        return self.table.get(v, "<unknown>")
+
+    def __set__(self, obj, value):
+        if isinstance(value, bytes):
+            value = value.decode("ASCII")
+        value = value.upper()
+        if value in self.table.values():
+            value = list(self.table.keys())[list(self.table.values()).index(value)]
+        else:
+            raise ValueError(str(value))
+        setattr(obj, self.name, value)
 
 
 class StatsDescriptor:
@@ -228,40 +257,59 @@ class Character:
     Has some safeguards, but buyer beware.
     """
 
-    # packed fields
+    # fields
 
     name: str = packed_field("16p")
     password: str = packed_field("16p")
-
     out: int = packed_field("B")
     _padding0: hexbytes = padding_field("1s")
-    race: int = packed_field("B")
+
+    race_raw: int = packed_field("B")
+    race: TabledDescriptor = virt_field(TabledDescriptor(RACES))
     _padding1: hexbytes = padding_field("1s")
-    cls: int = packed_field("B")
+    cls_raw: int = packed_field("B")
+    cls: TabledDescriptor = virt_field(TabledDescriptor(CLASSES))
     _padding2: hexbytes = padding_field("1s")
     age_raw: hexbytes = packed_field("2s")
+    age: AgeDescriptor = virt_field(AgeDescriptor())
     life: int = packed_field("B")
     _padding3: hexbytes = padding_field("1s")
-    alignment: int = packed_field("B")
+    alignment_raw: int = packed_field("B")
+    alignment: TabledDescriptor = virt_field(TabledDescriptor(ALIGNMENTS))
     _padding4: hexbytes = padding_field("1s")
     stats: hexbytes = packed_field("4s")
-
+    strength: StatsDescriptor = virt_field(StatsDescriptor(4))
+    iq: StatsDescriptor2 = virt_field(StatsDescriptor2(15, 16, 1))
+    piety: StatsDescriptor = virt_field(StatsDescriptor(10))
+    vitality: StatsDescriptor = virt_field(StatsDescriptor(20))
+    agility: StatsDescriptor2 = virt_field(StatsDescriptor2(31, 32, 17))
+    luck: StatsDescriptor = virt_field(StatsDescriptor(26))
     _padding5: hexbytes = padding_field("4s")
+
     gold_raw: hexbytes = packed_field("5s")
+    gold: B5_Descriptor = virt_field(B5_Descriptor())
     _padding6: hexbytes = padding_field("1s")
     n_items: int = packed_field("B")
     _padding7: hexbytes = padding_field("1s")
-
     item1_raw: hexbytes = packed_field("8s")
+    item1: ItemDescriptor = virt_field(ItemDescriptor())
     item2_raw: hexbytes = packed_field("8s")
+    item2: ItemDescriptor = virt_field(ItemDescriptor())
     item3_raw: hexbytes = packed_field("8s")
+    item3: ItemDescriptor = virt_field(ItemDescriptor())
     item4_raw: hexbytes = packed_field("8s")
+    item4: ItemDescriptor = virt_field(ItemDescriptor())
     item5_raw: hexbytes = packed_field("8s")
+    item5: ItemDescriptor = virt_field(ItemDescriptor())
     item6_raw: hexbytes = packed_field("8s")
+    item6: ItemDescriptor = virt_field(ItemDescriptor())
     item7_raw: hexbytes = packed_field("8s")
+    item7: ItemDescriptor = virt_field(ItemDescriptor())
     item8_raw: hexbytes = packed_field("8s")
+    item8: ItemDescriptor = virt_field(ItemDescriptor())
 
     experience_raw: hexbytes = packed_field("5s")
+    experience: B5_Descriptor = virt_field(B5_Descriptor())
     _padding8: hexbytes = padding_field("1s")
     last_level: int = packed_field("B")
     _padding9: hexbytes = padding_field("1s")
@@ -308,43 +356,19 @@ class Character:
     _padding27: hexbytes = padding_field("14s")
     honors_raw: hexbytes = packed_field("2s")
 
-    # virtual fields
-
-    age: AgeDescriptor = virt_field(AgeDescriptor())
-    gold: B5_Descriptor = virt_field(B5_Descriptor())
-    experience: B5_Descriptor = virt_field(B5_Descriptor())
-
-    strength: StatsDescriptor = virt_field(StatsDescriptor(4))
-    iq: StatsDescriptor2 = virt_field(StatsDescriptor2(15, 16, 1))
-    piety: StatsDescriptor = virt_field(StatsDescriptor(10))
-    vitality: StatsDescriptor = virt_field(StatsDescriptor(20))
-    agility: StatsDescriptor2 = virt_field(StatsDescriptor2(31, 32, 17))
-    luck: StatsDescriptor = virt_field(StatsDescriptor(26))
-
-    item1: ItemDescriptor = virt_field(ItemDescriptor())
-    item2: ItemDescriptor = virt_field(ItemDescriptor())
-    item3: ItemDescriptor = virt_field(ItemDescriptor())
-    item4: ItemDescriptor = virt_field(ItemDescriptor())
-    item5: ItemDescriptor = virt_field(ItemDescriptor())
-    item6: ItemDescriptor = virt_field(ItemDescriptor())
-    item7: ItemDescriptor = virt_field(ItemDescriptor())
-    item8: ItemDescriptor = virt_field(ItemDescriptor())
-
-    # I/O
-
-    @functools.cached_property
-    def _init_fields(self):
-        return sum(f.init for f in dataclasses.fields(self))
+    # binary packing
 
     @staticmethod
     def unpack(data):
         return Character(*struct.unpack(FORMAT, data))
 
     def pack(self):
-        return struct.pack(FORMAT, *dataclasses.astuple(self)[: self._init_fields])
+        packed_mask = [f.init for f in dataclasses.fields(self)]
+        packed_fields = itertools.compress(dataclasses.astuple(self), packed_mask)
+        return struct.pack(FORMAT, *packed_fields)
 
 
-# --- Save file IO/disk handling ---
+# --- Save file handling ---
 
 
 def find_base(data, name):
@@ -433,19 +457,21 @@ def edit(file, name, tasks):
     but strings need to be quoted, probably with shell escapes or quotes too.
     Binary ASCII encoding of Python strings is done automaticly.
 
-    The fields of type "hexbytes" can be set through ordinary
-    bytes literals (b"..."), or little endian integer literals (0x....).
+    The fields of type "hexbytes" can be set through ordinary bytes literals (b"..."),
+    other bytes constructions, or little endian integer literals in decimal or hex
+    base (0x....).
 
-    Note that in several cases the same character attributes can be accessed
-    (read and written) through either *_raw or cooked attribute names.
+    Note that in several cases character attributes can be accessed
+    (both read and written) through either *_raw or cooked attribute names.
 
     Examples (CLI):
 
     wizfix edit SAVE1.dsk.bak3 jeanne gold=10000 iq=10 luck+=1
 
-    wizfix edit SAVE1.dsk.bak3 jeanne 'password="secret"'
+    wizfix edit SAVE1.dsk.bak3 jeanne 'password="secret"' 'alignment="evil"'
 
     wizfix edit SAVE1.dsk.bak3 jeanne 'spells_raw=b"\\xfe\\xff\\xff\\xff\\xff\\xff\\x07"'
+    wizfix edit SAVE1.dsk.bak3 jeanne spells_raw=0xfeffffffffff07
     """
 
     def handle_task(char, task):
