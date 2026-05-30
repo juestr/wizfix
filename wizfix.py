@@ -35,9 +35,13 @@ VERSION = "0.2"
 
 # --- Game Data ---
 
-RACES = ["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"]
-CLASSES = ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
-ALIGNMENTS = ["GOOD", "NEUTRAL", "EVIL"]
+RACES = dict(enumerate(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1))
+CLASSES = dict(
+    enumerate(
+        ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
+    )
+)
+ALIGNMENTS = dict(enumerate(["GOOD", "NEUTRAL", "EVIL"], start=1))
 
 # --- Character interface ---
 
@@ -109,9 +113,8 @@ class HexBytesDescriptor:
 
 
 class TabledDescriptor:
-    def __init__(self, labels):
-        values = list(range(1, len(labels) + 1))
-        self.table = dict(zip(values, labels))
+    def __init__(self, table):
+        self.table = table
 
     def __set_name__(self, owner, name):
         self.name = f"{name}_raw"
