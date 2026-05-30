@@ -23,6 +23,7 @@ import binascii
 import contextlib
 import dataclasses
 import itertools
+import json
 import math
 import mmap
 import operator
@@ -511,6 +512,22 @@ class Character:
         packed_fields = itertools.compress(dataclasses.astuple(self), packed_mask)
         return struct.pack(FORMAT, *packed_fields)
 
+    def to_json(self, with_padding=False, indent=2, **flags):
+        def conv(obj):
+            if isinstance(obj, hexbytes):
+                return repr(obj)
+            elif isinstance(obj, bytes):
+                return obj.decode("ASCII")
+            else:
+                assert False
+
+        xs = [
+            (f.name, v)
+            for f, v in zip(dataclasses.fields(self), dataclasses.astuple(self))
+            if not f.name.startswith("_") or with_padding
+        ]
+        return json.dumps(dict(xs), default=conv, indent=indent, **flags)
+
 
 # --- Save file handling ---
 
@@ -536,34 +553,77 @@ def put_character(data, name, char):
 
 # --- Click CLI ---
 
-wrap_exceptions = True
-"""Wrap everything in user friendly ClickExceptions"""
+debug_mode = False
+output_json = False
 
 
 @contextlib.contextmanager
 def handle_exceptions():
-    if wrap_exceptions:
+    if debug_mode:
+        yield
+    else:
         try:
             yield
         except click.ClickException:
+            raise
+        except click.Abort:
             raise
         except ValueError as ex:
             raise click.BadParameter(str(ex)) from ex
         except Exception as ex:
             raise click.ClickException(str(ex)) from ex
+
+
+def show_character(char):
+    if output_json:
+        click.echo(char.to_json(with_padding=debug_mode))
     else:
-        yield
+        click.echo(pprint.pp(char))
+
+
+def handle_edit_task(char, task):
+    if "=" not in task:
+        raise ValueError(f"task {repr(task)}")
+    attr, valstr = task.split("=", 1)
+    match attr[-1]:
+        case "+":
+            op = operator.add
+            attr = attr[:-1]
+        case "-":
+            op = operator.sub
+            attr = attr[:-1]
+        case _:
+            op = lambda v, x: x
+    if not hasattr(char, attr):
+        raise ValueError(f"character attribute {attr}")
+    try:
+        val = eval(valstr, globals={"self": char})
+        if isinstance(val, str):
+            val = bytes(val, "ASCII")
+        val = op(getattr(char, attr), val)
+        setattr(char, attr, val)
+    except ValueError:
+        raise
+    except Exception as ex:
+        raise ValueError(f"{repr(task)} ({ex.args[0]})") from ex
+
+
+handle_edit_task_wrapped = handle_exceptions()(handle_edit_task)
 
 
 @click.group()
 @click.version_option(version=VERSION)
 @click.option("--debug", is_flag=True, help="Show technical details.", envvar="DEBUG")
-def main(debug=False):
-    global wrap_exceptions
+@click.option(
+    "--json", is_flag=True, help="Format output in json (default: Python pprint)."
+)
+def main(debug=False, json=False):
+    global debug_mode, output_json
     if debug:
-        wrap_exceptions = False
+        debug_mode = True
         for f in dataclasses.fields(Character):
             f.repr = True
+    output_json = json
 
 
 @main.command()
@@ -579,7 +639,7 @@ def show(file, name):
     """
     with mmap.mmap(file.fileno(), 0, prot=mmap.PROT_READ) as mm:
         char = Character.unpack(get_character(mm, name))
-        click.echo(pprint.pprint(char))
+        show_character(char)
 
 
 @main.command()
@@ -598,8 +658,9 @@ def edit(file, name, tasks):
     of plain assignment with =.
 
     In most cases assigning simple numbers are fine,
-    but strings need to be quoted, probably with shell escapes or quotes too.
-    Binary ASCII encoding of Python strings is done automaticly.
+    but strings need to be quoted, probably with shell escapes or quotes in
+    addition to the Python quotes. See example below.
+    Binary ASCII encoding and upper casing of strings is done automatically.
 
     The fields of type "hexbytes" can be set through ordinary bytes literals (b"..."),
     other bytes constructions, or little endian integer literals in decimal or hex
@@ -613,42 +674,50 @@ def edit(file, name, tasks):
     wizfix edit SAVE1.dsk.bak3 jeanne gold=10000 iq=10 luck+=1
 
     wizfix edit SAVE1.dsk.bak3 jeanne 'password="secret"' 'alignment="evil"'
+    wizfix edit SAVE1.dsk.bak3 jeanne 'item3="long sword + 2"'
 
     wizfix edit SAVE1.dsk.bak3 jeanne 'spells_raw=b"\\xfe\\xff\\xff\\xff\\xff\\xff\\x07"'
     wizfix edit SAVE1.dsk.bak3 jeanne spells_raw=0xfeffffffffff07
     """
 
-    def handle_task(char, task):
-        if "=" not in task:
-            raise ValueError(f"task {repr(task)}")
-        attr, valstr = task.split("=", 1)
-        match attr[-1]:
-            case "+":
-                op = operator.add
-                attr = attr[:-1]
-            case "-":
-                op = operator.sub
-                attr = attr[:-1]
-            case _:
-                op = lambda v, x: x
-        if not hasattr(char, attr):
-            raise ValueError(f"character attribute {attr}")
-        try:
-            val = eval(valstr, globals={"self": char})
-            if isinstance(val, str):
-                val = bytes(val, "ASCII")
-            val = op(getattr(char, attr), val)
-            setattr(char, attr, val)
-        except ValueError:
-            raise
-        except Exception as ex:
-            raise ValueError(f"{repr(task)} ({ex.args[0]})") from ex
-
     with mmap.mmap(file.fileno(), 0) as mm:
         char = Character.unpack(get_character(mm, name))
         for task in tasks:
-            handle_task(char, task)
+            handle_edit_task(char, task)
         put_character(mm, name, char.pack())
+
+
+@main.command()
+@click.argument("file", type=click.File("r+b"))
+@click.argument("name")
+@handle_exceptions()
+def shell(file, name):
+    """Edit attributes of character NAME in FILE in a REPL
+
+    The prompt accepts tasks as the edit command does, one per line.
+    """
+    with mmap.mmap(file.fileno(), 0) as mm:
+        char = Character.unpack(get_character(mm, name))
+        show_character(char)
+        while ...:
+            match click.prompt(
+                "<property>=<expression> or (S)ave, (Q)uit",
+                default="_",
+                show_default=False,
+            ):
+                case "_":
+                    show_character(char)
+                case "s" | "S" | "save" | "Save":
+                    put_character(mm, name, char.pack())
+                    return
+                case "q" | "Q" | "quit" | "Quit":
+                    raise click.Abort()
+                case task:
+                    try:
+                        handle_edit_task_wrapped(char, task)
+                        show_character(char)
+                    except click.ClickException as ex:
+                        ex.show()
 
 
 @main.command()
@@ -657,8 +726,11 @@ def edit(file, name, tasks):
 def table(name):
     """Show one of the built in identifier tables"""
     name = name.lower()
-    width = 80 if name.startswith("item") else 1
-    click.echo(pprint.pprint(TABLES[name], width=width))
+    if output_json:
+        click.echo(json.dumps(TABLES[name], indent=2))
+    else:
+        width = 80 if name.startswith("item") else 1
+        click.echo(pprint.pp(TABLES[name], width=width))
 
 
 if __name__ == "__main__":
