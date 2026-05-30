@@ -33,15 +33,131 @@ import click
 
 VERSION = "0.2"
 
+
 # --- Game Data ---
 
-RACES = dict(enumerate(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1))
-CLASSES = dict(
-    enumerate(
-        ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
-    )
+
+def _tbl(labels, start=0):
+    return dict(enumerate(labels, start))
+
+
+RACES = _tbl(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1)
+CLASSES = _tbl(
+    ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
 )
-ALIGNMENTS = dict(enumerate(["GOOD", "NEUTRAL", "EVIL"], start=1))
+ALIGNMENTS = _tbl(["GOOD", "NEUTRAL", "EVIL"], start=1)
+ITEMS_W1 = _tbl(
+    [
+        "LONG SWORD",
+        "SHORT SWORD",
+        "ANOINTED MACE",
+        "ANOINTED FLAIL",
+        "STAFF",
+        "DAGGER",
+        "SMALL SHIELD",
+        "LARGE SHIELD",
+        "ROBES",
+        "LEATHER ARMOR",
+        "CHAIN MAIL",
+        "BREAST PLATE",
+        "PLATE MAIL",
+        "HELM",
+        "DIOS POTION",
+        "LATUMOFIS POTION",
+        "LONG SWORD + 1",
+        "SHORT SWORD + 1",
+        "MACE + 1",
+        "STAFF OF MOGREF",
+        "SCROLL/KATINO",
+        "LEATHER ARMOR + 1",
+        "CHAIN MAIL + 1",
+        "PLATE MAIL + 1",
+        "SHIELD + 1",
+        "BREAST PLATE + 1",
+        "SCROLL/BADIOS",
+        "SCROLL/HALITO",
+        "LONG SWORD - 1",
+        "SHORT SWORD - 1",
+        "MACE - 1",
+        "STAFF + 2",
+        "DRAGON SLAYER",
+        "HELM + 1",
+        "LEATHER ARMOR - 1",
+        "CHAIN MAIL - 1",
+        "BREAST PLATE - 1",
+        "SHIELD - 1",
+        "JEWELD AMULET",
+        "SCROLL/BADIOS",
+        "POTOIN OF SOPIC",
+        "LONG SWORD + 2",
+        "SHORT SWORD + 2",
+        "MACE + 2",
+        "SCROLL/LOMILWA",
+        "SCROLL/DILTO",
+        "COPPER GLOVES",
+        "LEATHER ARMOR + 2",
+        "CHAIN MAIL + 2",
+        "PLATE MAIL + 2",
+        "SHIELD + 2",
+        "HELM + 2 (EVIL)",
+        "POTION OF DIAL",
+        "RING OF PORFIC",
+        "WERE SLAYER",
+        "MAGE MASHER",
+        "MACE PRO POISON",
+        "STAFF/MONTINO",
+        "BLADE CUSINART'",
+        "AMULET/MANIFO",
+        "ROD OF FLAME",
+        "EVIL CHAIN + 2",
+        "NEURTAL PLATE MAIL + 2",
+        "EVIL SHIELD + 2",
+        "AMULET MAKANITO",
+        "DIADEM OF MALOR",
+        "SCROLL/BADIAL",
+        "SHORT  SWORD - 2",
+        "DAGGER + 2",
+        "MACE - 2",
+        "STAFF - 2",
+        "DAGGER OF SPEED",
+        "CURSED ROBE",
+        "LEATHER ARMOR - 2",
+        "CHAIN MAIL - 2",
+        "BREAST PLATE - 2",
+        "SHIELD - 2",
+        "CURSED HELMET",
+        "BREAST PLATE + 2",
+        "SILVER GLOVES",
+        "EVIL SWORD + 3",
+        "EVIL SHORT SWORD + 3",
+        "THIEVES DAGGER",
+        "BREAST PLATE + 3",
+        "LORDS GARB",
+        "MURASAMA BLADE",
+        "SURIKEN",
+        "CHAIN PRO FIRE",
+        "EVIL PLATE MAIL + 3",
+        "SHIELD + 3",
+        "RING OF HEALING",
+        "RING PRO UNDEAD",
+        "DEADLY RING",
+        "WERDNA'S AMULET",
+        "STATUETTE/BEAR",
+        "STATUETTE/FROG",
+        "BRONZE KEY",
+        "SILVER KEY",
+        "GOLD KEY",
+        "BLUE RIBBON",
+    ],
+    start=1,
+)
+
+TABLES = {
+    "race": RACES,
+    "class": CLASSES,
+    "alignment": ALIGNMENTS,
+    "items_w1": ITEMS_W1,
+}
 
 # --- Character interface ---
 
@@ -101,15 +217,15 @@ class HexBytesDescriptor:
         self.size = int(fmt[:-1])
 
     def __set_name__(self, owner, name):
-        self.name = "_" + name
+        self._name = "_" + name
 
     def __get__(self, obj, objtype=None):
-        return getattr(obj, self.name)
+        return getattr(obj, self._name)
 
     def __set__(self, obj, value):
         if isinstance(value, int):
             value = value.to_bytes(self.size)
-        setattr(obj, self.name, hexbytes(value))
+        setattr(obj, self._name, hexbytes(value))
 
 
 class TabledDescriptor:
@@ -117,10 +233,10 @@ class TabledDescriptor:
         self.table = table
 
     def __set_name__(self, owner, name):
-        self.name = f"{name}_raw"
+        self.name_raw = f"{name}_raw"
 
     def __get__(self, obj, objtype=None):
-        v = getattr(obj, self.name)
+        v = getattr(obj, self.name_raw)
         return self.table.get(v, "<unknown>")
 
     def __set__(self, obj, value):
@@ -131,7 +247,37 @@ class TabledDescriptor:
             value = list(self.table.keys())[list(self.table.values()).index(value)]
         else:
             raise ValueError(str(value))
-        setattr(obj, self.name, value)
+        setattr(obj, self.name_raw, value)
+
+
+class ItemDescriptor(TabledDescriptor):
+    def __init__(self):
+        super().__init__(ITEMS_W1)
+
+    def __set_name__(self, owner, name):
+        super().__set_name__(owner, name)
+        self.n = int(name[-1])
+        self.name_equipped = name + "_equipped"
+        self.name_identified = name + "_identified"
+
+    def __get__(self, obj, objtype=None):
+        if self.n <= obj.n_items:
+            return super().__get__(obj, objtype)
+        else:
+            return None
+
+    def __set__(self, obj, value):
+        if value in (0, None, "", b""):
+            if self.n < obj.n_items:
+                raise ValueError("can only zero out last non empty item slot")
+            obj.n_items = min(obj.n_items, self.n - 1)
+        else:
+            if self.n > obj.n_items + 1:
+                raise ValueError("can only assign to first empty item slot")
+            super().__set__(obj, value)
+            setattr(obj, self.name_equipped, False)
+            setattr(obj, self.name_identified, True)
+            obj.n_items = max(obj.n_items, self.n)
 
 
 class StatsDescriptor:
@@ -213,45 +359,6 @@ class B5_Descriptor:
         setattr(obj, self.name_raw, bytes(reversed(xs)))
 
 
-class ItemDescriptor:
-    """Item by 2-byte number
-
-    Can use Python hex literals directly from table, concatenate byte #7 and #8.
-    Set items will become unequipped and identified.
-    The number of valid items is given by n_items, and the user is reponsible to
-    carefully manage this and inventory. The last non empty item can be removed
-    by assigning 0.
-    """
-
-    def __set_name__(self, owner, name):
-        self.n = int(name[-1])
-        self.name_raw = name + "_raw"
-
-    def __get__(self, obj, objtype=None):
-        """Convert item bytes 7 and 8 to a hex string"""
-        if self.n <= obj.n_items:
-            xs = getattr(obj, self.name_raw)
-            itemid = (xs[6] << 8) + xs[7]
-            return f"0x{itemid:04x}"
-        else:
-            return None
-
-    def __set__(self, obj, value):
-        """Accept int or str containing hex value"""
-        if isinstance(value, str):
-            value = int(value, 16)
-        elif value is None:
-            value = 0
-        if self.n > obj.n_items + 1:
-            raise ValueError("can only assign to first empty item")
-        if value == 0 and self.n != obj.n_items:
-            raise ValueError("can only remove last non empty item")
-        b7, b8 = divmod(value, 256)
-        xs = [0, 0, 0, 0, value > 0, 0, b7, b8]
-        setattr(obj, self.name_raw, bytes(xs))
-        obj.n_items = max(obj.n_items, self.n) - (value == 0)
-
-
 @dataclasses.dataclass
 class Character:
     """Character class making the binary data accessible
@@ -266,7 +373,7 @@ class Character:
 
     name: str = packed_field("16p")
     password: str = packed_field("16p")
-    out: int = packed_field("B")
+    out: bool = packed_field("?")
     _padding0: hexbytes = padding_field("1s")
 
     race_raw: int = packed_field("B")
@@ -296,22 +403,54 @@ class Character:
     _padding6: hexbytes = padding_field("1s")
     n_items: int = packed_field("B")
     _padding7: hexbytes = padding_field("1s")
-    item1_raw: hexbytes = packed_field("8s")
-    item1: ItemDescriptor = virt_field(ItemDescriptor())
-    item2_raw: hexbytes = packed_field("8s")
-    item2: ItemDescriptor = virt_field(ItemDescriptor())
-    item3_raw: hexbytes = packed_field("8s")
-    item3: ItemDescriptor = virt_field(ItemDescriptor())
-    item4_raw: hexbytes = packed_field("8s")
-    item4: ItemDescriptor = virt_field(ItemDescriptor())
-    item5_raw: hexbytes = packed_field("8s")
-    item5: ItemDescriptor = virt_field(ItemDescriptor())
-    item6_raw: hexbytes = packed_field("8s")
-    item6: ItemDescriptor = virt_field(ItemDescriptor())
-    item7_raw: hexbytes = packed_field("8s")
-    item7: ItemDescriptor = virt_field(ItemDescriptor())
-    item8_raw: hexbytes = packed_field("8s")
-    item8: ItemDescriptor = virt_field(ItemDescriptor())
+    item1_equipped: bool = packed_field("?")
+    _item1_padding1: hexbytes = padding_field("3s")
+    item1_identified: bool = packed_field("?")
+    _item1_padding2: hexbytes = padding_field("1s")
+    item1_raw: int = packed_field("H")
+    item1: TabledDescriptor = virt_field(ItemDescriptor())
+    item2_equipped: bool = packed_field("?")
+    _item2_padding1: hexbytes = padding_field("3s")
+    item2_identified: bool = packed_field("?")
+    _item2_padding2: hexbytes = padding_field("1s")
+    item2_raw: int = packed_field("H")
+    item2: TabledDescriptor = virt_field(ItemDescriptor())
+    item3_equipped: bool = packed_field("?")
+    _item3_padding1: hexbytes = padding_field("3s")
+    item3_identified: bool = packed_field("?")
+    _item3_padding2: hexbytes = padding_field("1s")
+    item3_raw: int = packed_field("H")
+    item3: TabledDescriptor = virt_field(ItemDescriptor())
+    item4_equipped: bool = packed_field("?")
+    _item4_padding1: hexbytes = padding_field("3s")
+    item4_identified: bool = packed_field("?")
+    _item4_padding2: hexbytes = padding_field("1s")
+    item4_raw: int = packed_field("H")
+    item4: TabledDescriptor = virt_field(ItemDescriptor())
+    item5_equipped: bool = packed_field("?")
+    _item5_padding1: hexbytes = padding_field("3s")
+    item5_identified: bool = packed_field("?")
+    _item5_padding2: hexbytes = padding_field("1s")
+    item5_raw: int = packed_field("H")
+    item5: TabledDescriptor = virt_field(ItemDescriptor())
+    item6_equipped: bool = packed_field("?")
+    _item6_padding1: hexbytes = padding_field("3s")
+    item6_identified: bool = packed_field("?")
+    _item6_padding2: hexbytes = padding_field("1s")
+    item6_raw: int = packed_field("H")
+    item6: TabledDescriptor = virt_field(ItemDescriptor())
+    item7_equipped: bool = packed_field("?")
+    _item7_padding1: hexbytes = padding_field("3s")
+    item7_identified: bool = packed_field("?")
+    _item7_padding2: hexbytes = padding_field("1s")
+    item7_raw: int = packed_field("H")
+    item7: TabledDescriptor = virt_field(ItemDescriptor())
+    item8_equipped: bool = packed_field("?")
+    _item8_padding1: hexbytes = padding_field("3s")
+    item8_identified: bool = packed_field("?")
+    _item8_padding2: hexbytes = padding_field("1s")
+    item8_raw: int = packed_field("H")
+    item8: TabledDescriptor = virt_field(ItemDescriptor())
 
     experience_raw: hexbytes = packed_field("5s")
     experience: B5_Descriptor = virt_field(B5_Descriptor())
@@ -510,6 +649,16 @@ def edit(file, name, tasks):
         for task in tasks:
             handle_task(char, task)
         put_character(mm, name, char.pack())
+
+
+@main.command()
+@click.argument("name", type=click.Choice(TABLES.keys()))
+@handle_exceptions()
+def table(name):
+    """Show one of the built in identifier tables"""
+    name = name.lower()
+    width = 80 if name.startswith("item") else 1
+    click.echo(pprint.pprint(TABLES[name], width=width))
 
 
 if __name__ == "__main__":
