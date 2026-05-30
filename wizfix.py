@@ -234,12 +234,14 @@ class ItemDescriptor:
             itemid = (xs[6] << 8) + xs[7]
             return f"0x{itemid:04x}"
         else:
-            return "<empty>"
+            return None
 
     def __set__(self, obj, value):
         """Accept int or str containing hex value"""
         if isinstance(value, str):
             value = int(value, 16)
+        elif value is None:
+            value = 0
         if self.n > obj.n_items + 1:
             raise ValueError("can only assign to first empty item")
         if value == 0 and self.n != obj.n_items:
