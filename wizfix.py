@@ -237,6 +237,8 @@ def packed_field(fmt, default=None):
     CHAR_LEN = struct.calcsize(FORMAT)
     if fmt[-1] == "s" and default is None:
         default = HexBytesDescriptor(fmt)
+    if fmt[-1] == "p" and default is None:
+        default = PascalStrDescriptor()
     # This gives *every* field a default, possibly of None.
     # Necessary because non-defaulted fields cannot follow fields with descriptors,
     # apparently at least not when the default is set through dataclasses.field.
@@ -273,9 +275,29 @@ class HexBytesDescriptor:
         return getattr(obj, self._name)
 
     def __set__(self, obj, value):
+        if isinstance(value, str):
+            value = value.encode("ASCII")
         if isinstance(value, int):
             value = value.to_bytes(self.size)
         setattr(obj, self._name, hexbytes(value))
+
+
+class pstr(bytes):
+    def __repr__(self):
+        return f"'{self.decode('ASCII')}'"
+
+
+class PascalStrDescriptor:
+    def __set_name__(self, owner, name):
+        self._name = "_" + name
+
+    def __get__(self, obj, objtype=None):
+        return getattr(obj, self._name)
+
+    def __set__(self, obj, value):
+        if isinstance(value, str):
+            value = value.encode("ASCII")
+        setattr(obj, self._name, pstr(value))
 
 
 def _get_bits(x, positions):
@@ -345,8 +367,6 @@ class TabledDescriptor:
         return self.table.get(v, "<unknown>")
 
     def __set__(self, obj, value):
-        if isinstance(value, bytes):
-            value = value.decode("ASCII")
         value = value.upper()
         if value in self.table.values():
             value = list(self.table.keys())[list(self.table.values()).index(value)]
@@ -409,8 +429,6 @@ class SpellsDescriptor:
             except KeyError as ex:
                 raise ValueError(f"invalid {spell_name} in {self.name}") from ex
 
-        if isinstance(value, bytes):
-            value = value.decode("ASCII")
         value = value.upper().strip()
         match value:
             case "" | "NONE":
@@ -439,138 +457,138 @@ class Character:
 
     # fields
 
-    name: str = packed_field("16p")
-    password: str = packed_field("16p")
+    name: PascalStrDescriptor = packed_field("16p")
+    password: PascalStrDescriptor = packed_field("16p")
     out: bool = packed_field("?")
-    _padding0: hexbytes = padding_field("1s")
+    _padding0: HexBytesDescriptor = padding_field("1s")
 
     race_raw: int = packed_field("B")
     race: TabledDescriptor = virt_field(TabledDescriptor(RACES))
-    _padding1: hexbytes = padding_field("1s")
+    _padding1: HexBytesDescriptor = padding_field("1s")
     cls_raw: int = packed_field("B")
     cls: TabledDescriptor = virt_field(TabledDescriptor(CLASSES))
-    _padding2: hexbytes = padding_field("1s")
-    age_raw: hexbytes = packed_field("2s")
+    _padding2: HexBytesDescriptor = padding_field("1s")
+    age_raw: HexBytesDescriptor = packed_field("2s")
     age: AgeDescriptor = virt_field(AgeDescriptor())
     life: int = packed_field("B")
-    _padding3: hexbytes = padding_field("1s")
+    _padding3: HexBytesDescriptor = padding_field("1s")
     alignment_raw: int = packed_field("B")
     alignment: TabledDescriptor = virt_field(TabledDescriptor(ALIGNMENTS))
-    _padding4: hexbytes = padding_field("1s")
-    stats_raw: hexbytes = packed_field("4s")
+    _padding4: HexBytesDescriptor = padding_field("1s")
+    stats_raw: HexBytesDescriptor = packed_field("4s")
     strength: StatsDescriptor = virt_field(StatsDescriptor([28, 27, 26, 25, 24]))
     iq: StatsDescriptor = virt_field(StatsDescriptor((17, 16, 31, 30, 29)))
     piety: StatsDescriptor = virt_field(StatsDescriptor((22, 21, 20, 19, 18)))
     vitality: StatsDescriptor = virt_field(StatsDescriptor((12, 11, 10, 9, 8)))
     agility: StatsDescriptor = virt_field(StatsDescriptor((1, 0, 15, 14, 13)))
     luck: StatsDescriptor = virt_field(StatsDescriptor((6, 5, 4, 3, 2)))
-    _padding5: hexbytes = padding_field("4s")
+    _padding5: HexBytesDescriptor = padding_field("4s")
 
-    gold_raw: hexbytes = packed_field("5s")
+    gold_raw: HexBytesDescriptor = packed_field("5s")
     gold: FiveBytesDescriptor = virt_field(FiveBytesDescriptor())
-    _padding6: hexbytes = padding_field("1s")
+    _padding6: HexBytesDescriptor = padding_field("1s")
     n_items: int = packed_field("B")
-    _padding7: hexbytes = padding_field("1s")
+    _padding7: HexBytesDescriptor = padding_field("1s")
     item1_equipped: bool = packed_field("?")
-    _item1_padding1: hexbytes = padding_field("3s")
+    _item1_padding1: HexBytesDescriptor = padding_field("3s")
     item1_identified: bool = packed_field("?")
-    _item1_padding2: hexbytes = padding_field("1s")
+    _item1_padding2: HexBytesDescriptor = padding_field("1s")
     item1_raw: int = packed_field("H")
     item1: TabledDescriptor = virt_field(ItemDescriptor())
     item2_equipped: bool = packed_field("?")
-    _item2_padding1: hexbytes = padding_field("3s")
+    _item2_padding1: HexBytesDescriptor = padding_field("3s")
     item2_identified: bool = packed_field("?")
-    _item2_padding2: hexbytes = padding_field("1s")
+    _item2_padding2: HexBytesDescriptor = padding_field("1s")
     item2_raw: int = packed_field("H")
     item2: TabledDescriptor = virt_field(ItemDescriptor())
     item3_equipped: bool = packed_field("?")
-    _item3_padding1: hexbytes = padding_field("3s")
+    _item3_padding1: HexBytesDescriptor = padding_field("3s")
     item3_identified: bool = packed_field("?")
-    _item3_padding2: hexbytes = padding_field("1s")
+    _item3_padding2: HexBytesDescriptor = padding_field("1s")
     item3_raw: int = packed_field("H")
     item3: TabledDescriptor = virt_field(ItemDescriptor())
     item4_equipped: bool = packed_field("?")
-    _item4_padding1: hexbytes = padding_field("3s")
+    _item4_padding1: HexBytesDescriptor = padding_field("3s")
     item4_identified: bool = packed_field("?")
-    _item4_padding2: hexbytes = padding_field("1s")
+    _item4_padding2: HexBytesDescriptor = padding_field("1s")
     item4_raw: int = packed_field("H")
     item4: TabledDescriptor = virt_field(ItemDescriptor())
     item5_equipped: bool = packed_field("?")
-    _item5_padding1: hexbytes = padding_field("3s")
+    _item5_padding1: HexBytesDescriptor = padding_field("3s")
     item5_identified: bool = packed_field("?")
-    _item5_padding2: hexbytes = padding_field("1s")
+    _item5_padding2: HexBytesDescriptor = padding_field("1s")
     item5_raw: int = packed_field("H")
     item5: TabledDescriptor = virt_field(ItemDescriptor())
     item6_equipped: bool = packed_field("?")
-    _item6_padding1: hexbytes = padding_field("3s")
+    _item6_padding1: HexBytesDescriptor = padding_field("3s")
     item6_identified: bool = packed_field("?")
-    _item6_padding2: hexbytes = padding_field("1s")
+    _item6_padding2: HexBytesDescriptor = padding_field("1s")
     item6_raw: int = packed_field("H")
     item6: TabledDescriptor = virt_field(ItemDescriptor())
     item7_equipped: bool = packed_field("?")
-    _item7_padding1: hexbytes = padding_field("3s")
+    _item7_padding1: HexBytesDescriptor = padding_field("3s")
     item7_identified: bool = packed_field("?")
-    _item7_padding2: hexbytes = padding_field("1s")
+    _item7_padding2: HexBytesDescriptor = padding_field("1s")
     item7_raw: int = packed_field("H")
     item7: TabledDescriptor = virt_field(ItemDescriptor())
     item8_equipped: bool = packed_field("?")
-    _item8_padding1: hexbytes = padding_field("3s")
+    _item8_padding1: HexBytesDescriptor = padding_field("3s")
     item8_identified: bool = packed_field("?")
-    _item8_padding2: hexbytes = padding_field("1s")
+    _item8_padding2: HexBytesDescriptor = padding_field("1s")
     item8_raw: int = packed_field("H")
     item8: TabledDescriptor = virt_field(ItemDescriptor())
 
-    experience_raw: hexbytes = packed_field("5s")
+    experience_raw: HexBytesDescriptor = packed_field("5s")
     experience: FiveBytesDescriptor = virt_field(FiveBytesDescriptor())
-    _padding8: hexbytes = padding_field("1s")
+    _padding8: HexBytesDescriptor = padding_field("1s")
     last_level: int = packed_field("B")
-    _padding9: hexbytes = padding_field("1s")
+    _padding9: HexBytesDescriptor = padding_field("1s")
     cur_level: int = packed_field("B")
-    _padding10: hexbytes = padding_field("1s")
+    _padding10: HexBytesDescriptor = padding_field("1s")
     hitpoints: int = packed_field("H")
     max_hitpoints: int = packed_field("H")
 
-    spells_raw: hexbytes = packed_field("7s")
+    spells_raw: HexBytesDescriptor = packed_field("7s")
     mage_spells: SpellsDescriptor = virt_field(SpellsDescriptor(MAGE_SPELLS))
     priest_spells: SpellsDescriptor = virt_field(SpellsDescriptor(PRIEST_SPELLS))
-    _padding11: hexbytes = padding_field("1s")
+    _padding11: HexBytesDescriptor = padding_field("1s")
     mage1_spells: int = packed_field("B")
-    _padding12: hexbytes = padding_field("1s")
+    _padding12: HexBytesDescriptor = padding_field("1s")
     mage2_spells: int = packed_field("B")
-    _padding13: hexbytes = padding_field("1s")
+    _padding13: HexBytesDescriptor = padding_field("1s")
     mage3_spells: int = packed_field("B")
-    _padding14: hexbytes = padding_field("1s")
+    _padding14: HexBytesDescriptor = padding_field("1s")
     mage4_spells: int = packed_field("B")
-    _padding15: hexbytes = padding_field("1s")
+    _padding15: HexBytesDescriptor = padding_field("1s")
     mage5_spells: int = packed_field("B")
-    _padding16: hexbytes = padding_field("1s")
+    _padding16: HexBytesDescriptor = padding_field("1s")
     mage6_spells: int = packed_field("B")
-    _padding17: hexbytes = padding_field("1s")
+    _padding17: HexBytesDescriptor = padding_field("1s")
     mage7_spells: int = packed_field("B")
-    _padding18: hexbytes = padding_field("1s")
+    _padding18: HexBytesDescriptor = padding_field("1s")
     priest1_spells: int = packed_field("B")
-    _padding19: hexbytes = padding_field("1s")
+    _padding19: HexBytesDescriptor = padding_field("1s")
     priest2_spells: int = packed_field("B")
-    _padding20: hexbytes = padding_field("1s")
+    _padding20: HexBytesDescriptor = padding_field("1s")
     priest3_spells: int = packed_field("B")
-    _padding21: hexbytes = padding_field("1s")
+    _padding21: HexBytesDescriptor = padding_field("1s")
     priest4_spells: int = packed_field("B")
-    _padding22: hexbytes = padding_field("1s")
+    _padding22: HexBytesDescriptor = padding_field("1s")
     priest5_spells: int = packed_field("B")
-    _padding23: hexbytes = padding_field("1s")
+    _padding23: HexBytesDescriptor = padding_field("1s")
     priest6_spells: int = packed_field("B")
-    _padding24: hexbytes = padding_field("1s")
+    _padding24: HexBytesDescriptor = padding_field("1s")
     priest7_spells: int = packed_field("B")
-    _padding25: hexbytes = padding_field("1s")
+    _padding25: HexBytesDescriptor = padding_field("1s")
 
     last_ac: int = packed_field("H")
     cur_ac: int = packed_field("H")
-    _padding26: hexbytes = padding_field("4s")
-    items_effects_raw: hexbytes = packed_field("10s")
-    _padding27: hexbytes = padding_field("14s")
-    honors_raw: hexbytes = packed_field("2s")
+    _padding26: HexBytesDescriptor = padding_field("4s")
+    items_effects_raw: HexBytesDescriptor = packed_field("10s")
+    _padding27: HexBytesDescriptor = padding_field("14s")
+    honors_raw: HexBytesDescriptor = packed_field("2s")
 
-    # binary packing
+    # I/O
 
     @staticmethod
     def unpack(data):
@@ -581,21 +599,13 @@ class Character:
         packed_fields = itertools.compress(dataclasses.astuple(self), packed_mask)
         return struct.pack(FORMAT, *packed_fields)
 
-    def to_json(self, with_padding=False, indent=2, **flags):
-        def conv(obj):
-            if isinstance(obj, hexbytes):
-                return repr(obj)
-            elif isinstance(obj, bytes):
-                return obj.decode("ASCII")
-            else:
-                assert False
-
-        xs = [
+    def select_fields(self, padding=False, raw=False):
+        return [
             (f.name, v)
             for f, v in zip(dataclasses.fields(self), dataclasses.astuple(self))
-            if not f.name.startswith("_") or with_padding
+            if not f.name.startswith("_") or padding
+            if not f.name.endswith("_raw") or raw
         ]
-        return json.dumps(dict(xs), default=conv, indent=indent, **flags)
 
 
 # --- Save file handling ---
@@ -625,6 +635,7 @@ def put_character(data, name, char):
 debug_mode = False
 output_json = False
 show_padding = False
+show_raw = False
 
 
 @contextlib.contextmanager
@@ -645,10 +656,20 @@ def handle_exceptions():
 
 
 def show_character(char):
+    def conv_json(obj):
+        if isinstance(obj, hexbytes):
+            return repr(obj)
+        elif isinstance(obj, bytes):
+            return obj.decode("ASCII")
+        else:
+            assert False
+
+    fields_values = char.select_fields(padding=show_padding, raw=show_raw)
     if output_json:
-        click.echo(char.to_json(with_padding=show_padding))
+        click.echo(json.dumps(dict(fields_values), default=conv_json, indent=2))
     else:
-        click.echo(pprint.pp(char))
+        for f, v in fields_values:
+            click.echo(f"{f + ':':>20} {v!r}")
 
 
 def handle_edit_task(char, task):
@@ -665,13 +686,11 @@ def handle_edit_task(char, task):
         case _:
             op = lambda v, x: x
     if not hasattr(char, attr):
-        raise ValueError(f"character attribute {attr}")
+        raise ValueError(f"character field {attr}")
     try:
-        val = eval(valstr, globals={"self": char})
-        if isinstance(val, str):
-            val = bytes(val, "ASCII")
-        val = op(getattr(char, attr), val)
-        setattr(char, attr, val)
+        cur = getattr(char, attr)
+        new = eval(valstr, globals={"self": char})
+        setattr(char, attr, op(cur, new))
     except ValueError:
         raise
     except Exception as ex:
@@ -689,15 +708,17 @@ handle_edit_task_wrapped = handle_exceptions()(handle_edit_task)
 @click.option(
     "--json", is_flag=True, help="Format output in json (default: Python pprint)."
 )
-@click.option("--padding", is_flag=True, help="Show padding bytes.")
-def main(debug=False, json=False, padding=False):
-    global debug_mode, output_json, show_padding
+@click.option("--raw", is_flag=True, help="Show *_raw fields.")
+@click.option("--padding", is_flag=True, help="Show padding fields.")
+def main(debug=False, json=False, padding=False, raw=False):
+    global debug_mode, output_json, show_padding, show_raw
     debug_mode = debug
     output_json = json
     show_padding = padding
     if show_padding:
         for f in dataclasses.fields(Character):
             f.repr = True
+    show_raw = raw
 
 
 @main.command()
