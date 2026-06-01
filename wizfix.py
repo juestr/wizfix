@@ -22,6 +22,7 @@ Why? The MSDOS archives version's level up bug completely ruined my stats.
 import binascii
 import contextlib
 import dataclasses
+import functools
 import itertools
 import json
 import math
@@ -39,7 +40,7 @@ VERSION = "0.3"
 
 
 def _tbl(labels, start=0):
-    return dict(enumerate(labels, start))
+    return {k: v for k, v in enumerate(labels, start) if v is not None}
 
 
 RACES = _tbl(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1)
@@ -47,6 +48,67 @@ CLASSES = _tbl(
     ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
 )
 ALIGNMENTS = _tbl(["GOOD", "NEUTRAL", "EVIL"], start=1)
+MAGE_SPELLS = _tbl(
+    [
+        "HALITO",
+        "MOGREF",
+        "KATINO",
+        "DUMAPIC",
+        "DILTO",
+        "SOPIC",
+        "MAHALITO",
+        "MOLITO",
+        "MORLIS",
+        "DALTO",
+        "LAHALITO",
+        "MAMORLIS",
+        "MAKANITO",
+        "MADALTO",
+        "LAKANITO",
+        "ZILWAN",
+        "MASOPIC",
+        "HAMAN",
+        "MALOR",
+        "MAHAMAN",
+        "TILTOWAIT",
+    ],
+    start=1,
+)
+PRIEST_SPELLS = _tbl(
+    [
+        "KALKI",
+        "DIOS",
+        "BADIOS",
+        "MILWA",
+        "PORFIC",
+        "MATU",
+        "CALFO",
+        "MANIFO",
+        "MONTINO",
+        "LOMILWA",
+        None,
+        "DIALKO",
+        "LATUMAPIC",
+        "BAMATU",
+        "DIAL",
+        "BADIAL",
+        "LATUMOFIS",
+        "MAPORFIC",
+        "DIALMA",
+        "BADIALMA",
+        "LITOKAN",
+        "KANDI",
+        "DI",
+        "BADI",
+        "LORTO",
+        "MADI",
+        "MABADI",
+        "LOKTOFEIT",
+        "MALIKTO",
+        "KADORTO",
+    ],
+    start=22,
+)
 ITEMS_W1 = _tbl(
     [
         "LONG SWORD",
@@ -157,6 +219,8 @@ TABLES = {
     "race": RACES,
     "class": CLASSES,
     "alignment": ALIGNMENTS,
+    "mage_spells": MAGE_SPELLS,
+    "priest_spells": PRIEST_SPELLS,
     "items_w1": ITEMS_W1,
 }
 
@@ -360,6 +424,48 @@ class B5_Descriptor:
         setattr(obj, self.name_raw, bytes(reversed(xs)))
 
 
+class SpellsDescriptor:
+    def __init__(self, table):
+        self.table = table
+        self.spell_bits = {spell: 1 << bit for bit, spell in table.items()}
+        self.all = sum(self.spell_bits.values())
+        self.inv_mask = 0xFFFFFFFFFFFFFF ^ self.all
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, obj, objtype=None):
+        raw_bits = int.from_bytes(obj.spells_raw, byteorder="little")
+        return ",".join(
+            [spell for bit, spell in self.table.items() if raw_bits & (1 << bit)]
+        )
+
+    def __set__(self, obj, value):
+        def get_bit(spell_name):
+            spell_name = spell_name.strip()
+            try:
+                return self.spell_bits[spell_name]
+            except KeyError as ex:
+                raise ValueError(f"invalid {spell_name} in {self.name}") from ex
+
+        if isinstance(value, bytes):
+            value = value.decode("ASCII")
+        value = value.upper().strip()
+        match value:
+            case "" | "NONE":
+                combined_bits = 0
+            case "ALL":
+                combined_bits = self.all
+            case _:
+                combined_bits = functools.reduce(
+                    operator.or_, map(get_bit, value.split(","))
+                )
+        raw_bits = int.from_bytes(obj.spells_raw, byteorder="little")
+        raw_bits &= self.inv_mask
+        raw_bits |= combined_bits
+        obj.spells_raw = raw_bits.to_bytes(7, byteorder="little")
+
+
 @dataclasses.dataclass
 class Character:
     """Character class making the binary data accessible
@@ -464,6 +570,8 @@ class Character:
     max_hitpoints: int = packed_field("H")
 
     spells_raw: hexbytes = packed_field("7s")
+    mage_spells: SpellsDescriptor = virt_field(SpellsDescriptor(MAGE_SPELLS))
+    priest_spells: SpellsDescriptor = virt_field(SpellsDescriptor(PRIEST_SPELLS))
     _padding11: hexbytes = padding_field("1s")
     mage1_spells: int = packed_field("B")
     _padding12: hexbytes = padding_field("1s")
