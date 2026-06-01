@@ -555,6 +555,7 @@ def put_character(data, name, char):
 
 debug_mode = False
 output_json = False
+show_padding = False
 
 
 @contextlib.contextmanager
@@ -576,7 +577,7 @@ def handle_exceptions():
 
 def show_character(char):
     if output_json:
-        click.echo(char.to_json(with_padding=debug_mode))
+        click.echo(char.to_json(with_padding=show_padding))
     else:
         click.echo(pprint.pp(char))
 
@@ -613,17 +614,21 @@ handle_edit_task_wrapped = handle_exceptions()(handle_edit_task)
 
 @click.group()
 @click.version_option(version=VERSION)
-@click.option("--debug", is_flag=True, help="Show technical details.", envvar="DEBUG")
+@click.option(
+    "--debug", is_flag=True, help="Show technical details (exceptions).", envvar="DEBUG"
+)
 @click.option(
     "--json", is_flag=True, help="Format output in json (default: Python pprint)."
 )
-def main(debug=False, json=False):
-    global debug_mode, output_json
-    if debug:
-        debug_mode = True
+@click.option("--padding", is_flag=True, help="Show padding bytes.")
+def main(debug=False, json=False, padding=False):
+    global debug_mode, output_json, show_padding
+    debug_mode = debug
+    output_json = json
+    show_padding = padding
+    if show_padding:
         for f in dataclasses.fields(Character):
             f.repr = True
-    output_json = json
 
 
 @main.command()
