@@ -39,16 +39,16 @@ VERSION = "0.3"
 # --- Game Data ---
 
 
-def _tbl(labels, start=0):
+def _table(labels, start=0):
     return {k: v for k, v in enumerate(labels, start) if v is not None}
 
 
-RACES = _tbl(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1)
-CLASSES = _tbl(
+RACES = _table(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1)
+CLASSES = _table(
     ["FIGHTER", "MAGE", "PRIEST", "THIEF", "BISHOP", "SAMURAI", "LORD", "NINJA"]
 )
-ALIGNMENTS = _tbl(["GOOD", "NEUTRAL", "EVIL"], start=1)
-MAGE_SPELLS = _tbl(
+ALIGNMENTS = _table(["GOOD", "NEUTRAL", "EVIL"], start=1)
+MAGE_SPELLS = _table(
     [
         "HALITO",
         "MOGREF",
@@ -74,7 +74,7 @@ MAGE_SPELLS = _tbl(
     ],
     start=1,
 )
-PRIEST_SPELLS = _tbl(
+PRIEST_SPELLS = _table(
     [
         "KALKI",
         "DIOS",
@@ -109,7 +109,7 @@ PRIEST_SPELLS = _tbl(
     ],
     start=22,
 )
-ITEMS_W1 = _tbl(
+ITEMS_W1 = _table(
     [
         "LONG SWORD",
         "SHORT SWORD",
@@ -228,12 +228,6 @@ TABLES = {
 
 FORMAT = "<"  # built dynamically by packed_field() later
 CHAR_LEN = 0  # same
-B5_WEIGHTS = (1, 256, 10_000, 2_560_000, 100_000_000)
-
-
-class hexbytes(bytes):
-    def __repr__(self):
-        return f"hexbytes({binascii.hexlify(self, sep=' ').decode('ASCII')})"
 
 
 def packed_field(fmt, default=None):
@@ -263,18 +257,9 @@ def virt_field(default):
     return dataclasses.field(default=default, init=False)
 
 
-def bits(x, start, end, shiftleft=0):
-    """bits of x from start to end *inclusive*; result shifted left
-
-    Numbering goes from left to right, starts at 1, as in reference document!
-    """
-    n = end - start + 1
-    return ((x >> (32 - end)) & ((1 << n) - 1)) << shiftleft
-
-
-def check_stat(name, x):
-    if not 1 <= x <= 18:
-        raise ValueError(f"{name} outside range: {x}")
+class hexbytes(bytes):
+    def __repr__(self):
+        return f"hexbytes({binascii.hexlify(self, sep=' ').decode('ASCII')})"
 
 
 class HexBytesDescriptor:
@@ -291,6 +276,61 @@ class HexBytesDescriptor:
         if isinstance(value, int):
             value = value.to_bytes(self.size)
         setattr(obj, self._name, hexbytes(value))
+
+
+def _get_bits(x, positions):
+    r = 0
+    for p in positions:
+        r = (r << 1) | ((x >> p) & 0x1)
+    return r
+
+
+class StatsDescriptor:
+    def __init__(self, positions):
+        self.positions = positions
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, obj, objtype=None):
+        x = int.from_bytes(obj.stats_raw)
+        return _get_bits(x, self.positions)
+
+    def __set__(self, obj, value):
+        if not 1 <= value <= 18:
+            raise ValueError(f"{value} outside range for {self.name}")
+        x = int.from_bytes(obj.stats_raw)
+        for i, p in enumerate(reversed(self.positions)):
+            x ^= (_get_bits(x, (p,)) ^ _get_bits(value, (i,))) << p
+        obj.stats_raw = x.to_bytes(4)
+
+
+class AgeDescriptor:
+    def __get__(self, obj, objtype=None):
+        return obj.age_raw[0] // 52 + obj.age_raw[1] * 5
+
+    def __set__(self, obj, value):
+        b0 = min(255, int(value * 52) % (5 * 52))
+        b1 = int(value) // 5
+        obj.age_raw = hexbytes([b0, b1])
+
+
+class FiveBytesDescriptor:
+    WEIGHTS = (1, 256, 10_000, 2_560_000, 100_000_000)
+
+    def __set_name__(self, owner, name):
+        self.name_raw = name + "_raw"
+
+    def __get__(self, obj, objtype=None):
+        xs = getattr(obj, self.name_raw)
+        return math.sumprod(xs, self.WEIGHTS)
+
+    def __set__(self, obj, value):
+        xs = []
+        for w in reversed(self.WEIGHTS):
+            xs.append(value // w)
+            value %= w
+        setattr(obj, self.name_raw, bytes(reversed(xs)))
 
 
 class TabledDescriptor:
@@ -343,85 +383,6 @@ class ItemDescriptor(TabledDescriptor):
             setattr(obj, self.name_equipped, False)
             setattr(obj, self.name_identified, True)
             obj.n_items = max(obj.n_items, self.n)
-
-
-class StatsDescriptor:
-    def __init__(self, start):
-        """stats with 5 contiguous bits at start"""
-        self.start = start
-        self.end = start + 4
-        self.sl = 32 - self.end
-
-    def __set_name__(self, owner, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        x = int.from_bytes(obj.stats)
-        return bits(x, self.start, self.end)
-
-    def __set__(self, obj, value):
-        check_stat(self.name, value)
-        x = int.from_bytes(obj.stats)
-        x ^= bits(x, self.start, self.end, self.sl) ^ (value << self.sl)
-        obj.stats = x.to_bytes(4)
-
-
-class StatsDescriptor2:
-    """for stats with bits in 2 places"""
-
-    def __init__(self, start1, end1, start2):
-        self.start1, self.end1, self.start2 = start1, end1, start2
-        self.len1 = end1 - start1 + 1
-        self.len2 = 5 - self.len1
-        self.end2 = start2 + self.len2 - 1
-        self.sl1 = 32 - self.end1
-        self.sl2 = 32 - self.end2
-
-    def __set_name__(self, owner, name):
-        self.name = name
-
-    def __get__(self, obj, objtype=None):
-        x = int.from_bytes(obj.stats)
-        b1 = bits(x, self.start1, self.end1, self.len2)
-        b2 = bits(x, self.start2, self.end2)
-        return b1 | b2
-
-    def __set__(self, obj, value):
-        check_stat(self.name, value)
-        val1 = value >> self.len2
-        val2 = value & ((1 << self.len2) - 1)
-        x = int.from_bytes(obj.stats)
-        x ^= bits(x, self.start1, self.end1, self.sl1) ^ (val1 << self.sl1)
-        x ^= bits(x, self.start2, self.end2, self.sl2) ^ (val2 << self.sl2)
-        obj.stats = x.to_bytes(4)
-
-
-class AgeDescriptor:
-    def __get__(self, obj, objtype=None):
-        return obj.age_raw[0] // 52 + obj.age_raw[1] * 5
-
-    def __set__(self, obj, value):
-        b0 = min(255, int(value * 52) % (5 * 52))
-        b1 = int(value) // 5
-        obj.age_raw = hexbytes([b0, b1])
-
-
-class B5_Descriptor:
-    """A number encoded in 5 bytes using B5_WEIGTHS"""
-
-    def __set_name__(self, owner, name):
-        self.name_raw = name + "_raw"
-
-    def __get__(self, obj, objtype=None):
-        xs = getattr(obj, self.name_raw)
-        return math.sumprod(xs, B5_WEIGHTS)
-
-    def __set__(self, obj, value):
-        xs = []
-        for w in reversed(B5_WEIGHTS):
-            xs.append(value // w)
-            value %= w
-        setattr(obj, self.name_raw, bytes(reversed(xs)))
 
 
 class SpellsDescriptor:
@@ -496,17 +457,17 @@ class Character:
     alignment_raw: int = packed_field("B")
     alignment: TabledDescriptor = virt_field(TabledDescriptor(ALIGNMENTS))
     _padding4: hexbytes = padding_field("1s")
-    stats: hexbytes = packed_field("4s")
-    strength: StatsDescriptor = virt_field(StatsDescriptor(4))
-    iq: StatsDescriptor2 = virt_field(StatsDescriptor2(15, 16, 1))
-    piety: StatsDescriptor = virt_field(StatsDescriptor(10))
-    vitality: StatsDescriptor = virt_field(StatsDescriptor(20))
-    agility: StatsDescriptor2 = virt_field(StatsDescriptor2(31, 32, 17))
-    luck: StatsDescriptor = virt_field(StatsDescriptor(26))
+    stats_raw: hexbytes = packed_field("4s")
+    strength: StatsDescriptor = virt_field(StatsDescriptor([28, 27, 26, 25, 24]))
+    iq: StatsDescriptor = virt_field(StatsDescriptor((17, 16, 31, 30, 29)))
+    piety: StatsDescriptor = virt_field(StatsDescriptor((22, 21, 20, 19, 18)))
+    vitality: StatsDescriptor = virt_field(StatsDescriptor((12, 11, 10, 9, 8)))
+    agility: StatsDescriptor = virt_field(StatsDescriptor((1, 0, 15, 14, 13)))
+    luck: StatsDescriptor = virt_field(StatsDescriptor((6, 5, 4, 3, 2)))
     _padding5: hexbytes = padding_field("4s")
 
     gold_raw: hexbytes = packed_field("5s")
-    gold: B5_Descriptor = virt_field(B5_Descriptor())
+    gold: FiveBytesDescriptor = virt_field(FiveBytesDescriptor())
     _padding6: hexbytes = padding_field("1s")
     n_items: int = packed_field("B")
     _padding7: hexbytes = padding_field("1s")
@@ -560,7 +521,7 @@ class Character:
     item8: TabledDescriptor = virt_field(ItemDescriptor())
 
     experience_raw: hexbytes = packed_field("5s")
-    experience: B5_Descriptor = virt_field(B5_Descriptor())
+    experience: FiveBytesDescriptor = virt_field(FiveBytesDescriptor())
     _padding8: hexbytes = padding_field("1s")
     last_level: int = packed_field("B")
     _padding9: hexbytes = padding_field("1s")
