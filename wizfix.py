@@ -214,6 +214,156 @@ ITEMS_W1 = _table(
     ],
     start=1,
 )
+ITEMS_W2 = ITEMS_W1 | _table(
+    [
+        "Rod of Raising",
+        "Amulet of Cover",
+        "Robe + 3",
+        "Winter Mittens",
+        "Necklace Pro Magic",
+        "Staff of Light",
+        "Long Sword + 5",
+        "Sword of Swinging",
+        "Priest Puncher",
+        "Priest's Mace",
+        "Short Sword of Swinging",
+        "Ring Pro Fire",
+        "Cursed Plate Mail + 1",
+        "Plate Mail + 5",
+        "Staff of Curing",
+        "Ring of Regeneration",
+        "Metamorph Ring",
+        "Stone Stone",
+        "Dreamer's Stone",
+        "Damien Stone",
+        "Great Mage Wand",
+        "Coin of Power",
+        "Stone of Youth",
+        "Mind Stone",
+        "Stone of Piety",
+        "Blarney Stone",
+        "Amulet of Skill",
+        "Amulet of Skill",
+        "Great Mage Wand",
+        "Coin of Power",
+        "Staff of Gnilda",
+        "Hrathnit",
+        "Kod's Helmet",
+        "Kod's Shield",
+        "Kod's Gauntlets",
+        "Kod's Armor",
+    ],
+    start=0x5E,
+)
+ITEMS_W3 = ITEMS_W2 | _table(
+    [
+        "Broken Item",
+        "Orb of Earithin",
+        "Neutral Crystal",
+        "Crystal of Evil",
+        "Crystal of Good",
+        "Ship in Bottle",
+        "Staff of Earch",
+        "Amulet of Air",
+        "Holy Water",
+        "Rod of Fire",
+        "Gold Medallion",
+        "Orb of Mhuuzfis",
+        "Butterfly Knife",
+        "Short Sword",
+        "Broad Sword",
+        "Mace",
+        "Staff",
+        "Hand Axe",
+        "Battle Axe",
+        "Dagger",
+        "Flail",
+        "Round Shield",
+        "Heater Shield",
+        "Mage's Robe",
+        None,
+        "Haubek",
+        "Breast Plate",
+        "Plate Armor",
+        "Sallet",
+        "Potion of Dios",
+        "Latumofis Oil",
+        "Short Sword + 1",
+        "Broad Sword + 1",
+        "Mace + 1",
+        "Battle Axe + 1",
+        "Nunchuka",
+        "Dagger + 1",
+        "Katino Scroll",
+        "Cuirass + 1",
+        "Hauberk + 1",
+        "Breast Plate + 1",
+        "Plate Armor + 1",
+        "Heater + 1",
+        "Bascinet",
+        "Iron Gloves",
+        "Badios Scroll",
+        "Halito Potion",
+        "Short Sword - 1",
+        "Battle Axe - 1",
+        "Mace - 1",
+        "Dagger - 1",
+        "Battle Axe - 1",
+        "Margauz's Flail",
+        "Bag of Gems",
+        "Wizard's Staff",
+        "Flametongue",
+        "Round Shield - 1",
+        "Cuirass - 1",
+        "Hauberk - 1",
+        "Breast Plate - 1",
+        "Plate Armor - 1",
+        "Sallet - 1",
+        "Sopic Philtre",
+        "Gold Ring",
+        "Salamander Ring",
+        "Serpent's Tooth",
+        "Short Sword + 2",
+        "Broad Sword + 2",
+        "Battle Axe + 2",
+        "Ivory Dagger",
+        "Ebony Dagger",
+        "Amber Dagger",
+        "Mace + 2",
+        "Mithril Gloves",
+        "Dailki Amulet",
+        "Cuirass + 2",
+        "Heater + 2",
+        "Displacer Robes",
+        "Hauberk + 2",
+        "Breast Plate + 2",
+        "Plate Armor + 2",
+        "Armet",
+        "Wargan Robes",
+        "Giant's Club",
+        "Blade Cuisinart",
+        "Shepherd Crook",
+        "Unholy Axe",
+        "Rod of Death",
+        "Gem of Exorcism",
+        "Bag of Emeralds",
+        "Bag of Garnets",
+        "Blue Pearl",
+        "Ruby Slippers",
+        "Necrology Rod",
+        "Book of Life",
+        "Book of Death",
+        "Dragon's Tooth",
+        "Trollkin Ring",
+        "Rabbit's Foot",
+        "Thief's Pick",
+        "Book of Demons",
+        "Butterfly Knife",
+        "Gold Tiara",
+        "Mantis Gloves",
+    ],
+    start=0x03E8,
+)
 
 TABLES = {
     "race": RACES,
@@ -222,7 +372,10 @@ TABLES = {
     "mage_spells": MAGE_SPELLS,
     "priest_spells": PRIEST_SPELLS,
     "items_w1": ITEMS_W1,
+    "items_w2": ITEMS_W2,
+    "items_w3": ITEMS_W3,
 }
+
 
 # --- Character interface ---
 
@@ -230,7 +383,7 @@ FORMAT = "<"  # built dynamically by packed_field() later
 CHAR_LEN = 0  # same
 
 
-def packed_field(fmt, default=None):
+def packed_field(fmt, default=None, repr=True):
     global FORMAT
     global CHAR_LEN
     FORMAT += fmt
@@ -242,17 +395,11 @@ def packed_field(fmt, default=None):
     # This gives *every* field a default, possibly of None.
     # Necessary because non-defaulted fields cannot follow fields with descriptors,
     # apparently at least not when the default is set through dataclasses.field.
-    return dataclasses.field(default=default)
+    return dataclasses.field(default=default, metadata={"packed": True}, repr=repr)
 
 
-def padding_field(fmt, default=None):
-    global FORMAT
-    global CHAR_LEN
-    FORMAT += fmt
-    CHAR_LEN = struct.calcsize(FORMAT)
-    if fmt[-1] == "s" and default is None:
-        default = HexBytesDescriptor(fmt)
-    return dataclasses.field(repr=False, default=default)
+def padding_field(fmt):
+    return packed_field(fmt, repr=False)
 
 
 def virt_field(default):
@@ -301,6 +448,7 @@ class PascalStrDescriptor:
 
 
 def _get_bits(x, positions):
+    """Assemble bits at given positions from x into an int"""
     r = 0
     for p in positions:
         r = (r << 1) | ((x >> p) & 0x1)
@@ -359,6 +507,10 @@ class TabledDescriptor:
     def __init__(self, table):
         self.table = table
 
+    @functools.cached_property
+    def table_inv(self):
+        return {v.replace(" ", ""): k for k, v in self.table.items()}
+
     def __set_name__(self, owner, name):
         self.name_raw = f"{name}_raw"
 
@@ -368,16 +520,17 @@ class TabledDescriptor:
 
     def __set__(self, obj, value):
         value = value.upper()
-        if value in self.table.values():
-            value = list(self.table.keys())[list(self.table.values()).index(value)]
-        else:
+        try:
+            raw_value = self.table_inv[value.replace(" ", "")]
+        except KeyError:
             raise ValueError(str(value))
-        setattr(obj, self.name_raw, value)
+        else:
+            setattr(obj, self.name_raw, raw_value)
 
 
 class ItemDescriptor(TabledDescriptor):
     def __init__(self):
-        super().__init__(ITEMS_W1)
+        super().__init__(None)
 
     def __set_name__(self, owner, name):
         super().__set_name__(owner, name)
@@ -385,8 +538,12 @@ class ItemDescriptor(TabledDescriptor):
         self.name_equipped = name + "_equipped"
         self.name_identified = name + "_identified"
 
+    def _late_init_table(self, obj):
+        self.table = self.table or [ITEMS_W1, ITEMS_W2, ITEMS_W3][obj.wizardry - 1]
+
     def __get__(self, obj, objtype=None):
         if self.n <= obj.n_items:
+            self._late_init_table(obj)
             return super().__get__(obj, objtype)
         else:
             return None
@@ -399,6 +556,7 @@ class ItemDescriptor(TabledDescriptor):
         else:
             if self.n > obj.n_items + 1:
                 raise ValueError("can only assign to first empty item slot")
+            self._late_init_table(obj)
             super().__set__(obj, value)
             setattr(obj, self.name_equipped, False)
             setattr(obj, self.name_identified, True)
@@ -588,14 +746,18 @@ class Character:
     _padding27: HexBytesDescriptor = padding_field("14s")
     honors_raw: HexBytesDescriptor = packed_field("2s")
 
+    # mode selection
+
+    wizardry: int = dataclasses.field(default=3, repr=False)  # 1|2|3
+
     # I/O
 
     @staticmethod
-    def unpack(data):
-        return Character(*struct.unpack(FORMAT, data))
+    def unpack(data, wizardry=3):
+        return Character(*struct.unpack(FORMAT, data), wizardry=wizardry)
 
     def pack(self):
-        packed_mask = [f.init for f in dataclasses.fields(self)]
+        packed_mask = ["packed" in f.metadata for f in dataclasses.fields(self)]
         packed_fields = itertools.compress(dataclasses.astuple(self), packed_mask)
         return struct.pack(FORMAT, *packed_fields)
 
@@ -605,6 +767,7 @@ class Character:
             for f, v in zip(dataclasses.fields(self), dataclasses.astuple(self))
             if not f.name.startswith("_") or padding
             if not f.name.endswith("_raw") or raw
+            if f.name != "wizardry"
         ]
 
 
@@ -632,10 +795,12 @@ def put_character(data, name, char):
 
 # --- Click CLI ---
 
+# globals vars only used in this section
 debug_mode = False
 output_json = False
 show_padding = False
 show_raw = False
+wizardry_mode = 3
 
 
 @contextlib.contextmanager
@@ -700,25 +865,25 @@ def handle_edit_task(char, task):
 handle_edit_task_wrapped = handle_exceptions()(handle_edit_task)
 
 
-@click.group()
+@click.group(epilog="Options can also be set by WIZFIX_* environment variables.")
 @click.version_option(version=VERSION)
-@click.option(
-    "--debug", is_flag=True, help="Show technical details (exceptions).", envvar="DEBUG"
-)
-@click.option(
-    "--json", is_flag=True, help="Format output in json (default: Python pprint)."
-)
+@click.option("--debug", is_flag=True, help="Show technical details (exceptions).")
+@click.option("--json", is_flag=True, help="Format output in json.")
 @click.option("--raw", is_flag=True, help="Show *_raw fields.")
 @click.option("--padding", is_flag=True, help="Show padding fields.")
-def main(debug=False, json=False, padding=False, raw=False):
-    global debug_mode, output_json, show_padding, show_raw
+@click.option(
+    "--wizardry",
+    type=click.Choice[int]([1, 2, 3]),
+    default=3,
+    help="Wizardry number (for items DB).",
+)
+def main(debug, json, padding, raw, wizardry):
+    global debug_mode, output_json, show_padding, show_raw, wizardry_mode
     debug_mode = debug
     output_json = json
     show_padding = padding
-    if show_padding:
-        for f in dataclasses.fields(Character):
-            f.repr = True
     show_raw = raw
+    wizardry_mode = wizardry
 
 
 @main.command()
@@ -733,7 +898,7 @@ def show(file, name):
     wizfix show SAVE1.dsk jeanne
     """
     with mmap.mmap(file.fileno(), 0, prot=mmap.PROT_READ) as mm:
-        char = Character.unpack(get_character(mm, name))
+        char = Character.unpack(get_character(mm, name), wizardry=wizardry_mode)
         show_character(char)
 
 
@@ -764,6 +929,8 @@ def edit(file, name, tasks):
     Note that in several cases character attributes can be accessed
     (both read and written) through either *_raw or cooked attribute names.
 
+    The *_spells fields accept "NONE" and "ALL" as special values.
+
     Examples (CLI):
 
     wizfix edit SAVE1.dsk.bak3 jeanne gold=10000 iq=10 luck+=1
@@ -776,7 +943,7 @@ def edit(file, name, tasks):
     """
 
     with mmap.mmap(file.fileno(), 0) as mm:
-        char = Character.unpack(get_character(mm, name))
+        char = Character.unpack(get_character(mm, name), wizardry=wizardry_mode)
         for task in tasks:
             handle_edit_task(char, task)
         put_character(mm, name, char.pack())
@@ -792,7 +959,7 @@ def shell(file, name):
     The prompt accepts tasks as the edit command does, one per line.
     """
     with mmap.mmap(file.fileno(), 0) as mm:
-        char = Character.unpack(get_character(mm, name))
+        char = Character.unpack(get_character(mm, name), wizardry=wizardry_mode)
         show_character(char)
         while ...:
             match click.prompt(
@@ -829,4 +996,4 @@ def table(name):
 
 
 if __name__ == "__main__":
-    main()
+    main(auto_envvar_prefix="WIZFIX")
