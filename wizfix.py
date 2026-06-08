@@ -33,7 +33,7 @@ import struct
 
 import click
 
-VERSION = "0.3"
+VERSION = "0.4"
 
 
 # --- Game Data ---
