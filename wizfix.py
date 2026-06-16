@@ -594,8 +594,6 @@ def createCharCls(items):
         Has some safeguards, but buyer beware.
         """
 
-        # fields
-
         name: PascalStrDescriptor = packed_field("16p")
         password: PascalStrDescriptor = packed_field("16p")
         out: bool = packed_field("?")
@@ -860,9 +858,6 @@ def handle_edit_task(char, task):
         raise ValueError(f"{repr(task)} ({ex.args[0]})") from ex
 
 
-handle_edit_task_wrapped = handle_exceptions()(handle_edit_task)
-
-
 @click.group(epilog="Options can also be set by WIZFIX_* environment variables.")
 @click.version_option(version=VERSION)
 @click.option("--debug", is_flag=True, help="Show technical details (exceptions).")
@@ -974,7 +969,8 @@ def shell(file, name):
                     raise click.Abort()
                 case task:
                     try:
-                        handle_edit_task_wrapped(char, task)
+                        with handle_exceptions():
+                            handle_edit_task(char, task)
                         show_character(char)
                     except click.ClickException as ex:
                         ex.show()
