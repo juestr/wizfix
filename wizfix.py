@@ -28,7 +28,6 @@ import json
 import math
 import mmap
 import operator
-import pprint
 import struct
 
 import click
