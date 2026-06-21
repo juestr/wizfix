@@ -39,7 +39,7 @@ VERSION = "0.4"
 
 
 def _table(labels, start=0):
-    return {k: v for k, v in enumerate(labels, start) if v is not None}
+    return {k: v.upper() for k, v in enumerate(labels, start) if v is not None}
 
 
 RACES = _table(["HUMAN", "ELF", "DWARF", "GNOME", "HOBBIT"], start=1)
